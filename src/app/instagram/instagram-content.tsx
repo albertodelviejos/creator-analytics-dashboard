@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { EngagementChart } from "@/components/EngagementChart";
-import { DataTable, Column } from "@/components/DataTable";
 import { ContentTypeBadge } from "@/components/ContentTypeBadge";
 import { SyncButton } from "@/components/SyncButton";
 import {
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatNumber, formatDate } from "@/lib/format";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface InstagramPost {
   id: number;
@@ -25,77 +25,94 @@ interface InstagramPost {
   likes: number;
   comments: number;
   engagement_rate: number | null;
+  thumbnail_url: string | null;
 }
 
 interface InstagramContentProps {
   posts: InstagramPost[];
 }
 
-const columns: Column<InstagramPost>[] = [
-  {
-    key: "published_at",
-    header: "Date",
-    sortable: true,
-    render: (row) => (
-      <span className="text-sm">{formatDate(row.published_at)}</span>
-    ),
-  },
-  {
-    key: "type",
-    header: "Type",
-    render: (row) => <ContentTypeBadge type={row.type} />,
-  },
-  {
-    key: "caption",
-    header: "Caption",
-    render: (row) => (
-      <span className="text-sm text-muted-foreground max-w-[200px] truncate block">
-        {row.caption || "-"}
-      </span>
-    ),
-  },
-  {
-    key: "views",
-    header: "Views",
-    sortable: true,
-    render: (row) => (
-      <span className="font-mono text-sm">
-        {row.views != null ? formatNumber(row.views) : "-"}
-      </span>
-    ),
-  },
-  {
-    key: "likes",
-    header: "Likes",
-    sortable: true,
-    render: (row) => (
-      <span className="font-mono text-sm">{formatNumber(row.likes)}</span>
-    ),
-  },
-  {
-    key: "comments",
-    header: "Comments",
-    sortable: true,
-    render: (row) => (
-      <span className="font-mono text-sm">{formatNumber(row.comments)}</span>
-    ),
-  },
-  {
-    key: "engagement_rate",
-    header: "Engagement",
-    sortable: true,
-    render: (row) => (
-      <span className="font-mono text-sm">
-        {row.engagement_rate != null
-          ? `${row.engagement_rate.toFixed(2)}%`
-          : "-"}
-      </span>
-    ),
-  },
-];
+function PostCard({ post }: { post: InstagramPost }) {
+  const [imgError, setImgError] = useState(false);
+  const initial = post.shortcode[0]?.toUpperCase() || "?";
+
+  return (
+    <a
+      href={post.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/5"
+    >
+      {/* Thumbnail */}
+      <div className="relative aspect-square bg-muted flex items-center justify-center overflow-hidden">
+        {post.thumbnail_url && !imgError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.thumbnail_url}
+            alt={post.caption || post.shortcode}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center text-white text-xl font-bold">
+            {initial}
+          </div>
+        )}
+
+        {/* Type badge */}
+        <div className="absolute top-2 left-2">
+          <ContentTypeBadge type={post.type} />
+        </div>
+
+        {/* Views badge (if video) */}
+        {post.views != null && post.views > 0 && (
+          <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded-md">
+            <span className="text-white font-bold text-xs">
+              {formatNumber(post.views)}
+            </span>
+            <span className="text-zinc-400 text-[10px] ml-1">views</span>
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-4 text-white text-sm font-medium">
+            <span>❤️ {formatNumber(post.likes)}</span>
+            <span>💬 {formatNumber(post.comments)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card body */}
+      <div className="p-3 space-y-1.5">
+        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed min-h-[2rem]">
+          {post.caption || "Sin caption"}
+        </p>
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground/60">
+          <span>{formatDate(post.published_at)}</span>
+          {post.engagement_rate != null && (
+            <span
+              className={`font-medium ${
+                post.engagement_rate >= 5
+                  ? "text-emerald-500"
+                  : post.engagement_rate >= 2
+                  ? "text-amber-500"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {post.engagement_rate.toFixed(1)}% eng
+            </span>
+          )}
+        </div>
+      </div>
+    </a>
+  );
+}
 
 export function InstagramContent({ posts }: InstagramContentProps) {
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [view, setView] = useState<string>("grid");
 
   const filtered =
     typeFilter === "all"
@@ -136,14 +153,96 @@ export function InstagramContent({ posts }: InstagramContentProps) {
             </SelectContent>
           </Select>
         </div>
-        <SyncButton platform="instagram" />
+        <div className="flex items-center gap-2">
+          <Tabs value={view} onValueChange={setView}>
+            <TabsList className="h-8">
+              <TabsTrigger value="grid" className="text-xs px-3">
+                Grid
+              </TabsTrigger>
+              <TabsTrigger value="table" className="text-xs px-3">
+                Table
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <SyncButton platform="instagram" />
+        </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyExtractor={(row) => row.id}
-      />
+      {view === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {filtered.map((post) => (
+            <PostCard key={post.id} post={post} />
+          ))}
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="text-left p-3 font-medium text-muted-foreground">Preview</th>
+                <th className="text-left p-3 font-medium text-muted-foreground">Date</th>
+                <th className="text-left p-3 font-medium text-muted-foreground">Type</th>
+                <th className="text-left p-3 font-medium text-muted-foreground">Caption</th>
+                <th className="text-right p-3 font-medium text-muted-foreground">Views</th>
+                <th className="text-right p-3 font-medium text-muted-foreground">Likes</th>
+                <th className="text-right p-3 font-medium text-muted-foreground">Comments</th>
+                <th className="text-right p-3 font-medium text-muted-foreground">Eng.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((post) => (
+                <TableRow key={post.id} post={post} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TableRow({ post }: { post: InstagramPost }) {
+  const [imgError, setImgError] = useState(false);
+
+  return (
+    <tr className="border-b border-border hover:bg-muted/30 transition-colors">
+      <td className="p-2">
+        <a href={post.url} target="_blank" rel="noopener noreferrer">
+          {post.thumbnail_url && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.thumbnail_url}
+              alt=""
+              className="w-12 h-12 rounded-md object-cover"
+              loading="lazy"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+              📷
+            </div>
+          )}
+        </a>
+      </td>
+      <td className="p-3 whitespace-nowrap">{formatDate(post.published_at)}</td>
+      <td className="p-3">
+        <ContentTypeBadge type={post.type} />
+      </td>
+      <td className="p-3">
+        <span className="max-w-[200px] truncate block text-muted-foreground">
+          {post.caption || "-"}
+        </span>
+      </td>
+      <td className="p-3 text-right font-mono">
+        {post.views != null ? formatNumber(post.views) : "-"}
+      </td>
+      <td className="p-3 text-right font-mono">{formatNumber(post.likes)}</td>
+      <td className="p-3 text-right font-mono">{formatNumber(post.comments)}</td>
+      <td className="p-3 text-right font-mono">
+        {post.engagement_rate != null
+          ? `${post.engagement_rate.toFixed(1)}%`
+          : "-"}
+      </td>
+    </tr>
   );
 }

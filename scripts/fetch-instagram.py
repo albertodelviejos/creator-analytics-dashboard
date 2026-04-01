@@ -114,6 +114,10 @@ def fetch_all_posts(session, user_id):
             likes = item.get("like_count", 0)
             comments = item.get("comment_count", 0)
 
+            # Thumbnail
+            candidates = item.get("image_versions2", {}).get("candidates", [])
+            thumbnail_url = candidates[0]["url"] if candidates else None
+
             total = likes + comments
             eng_rate = round((total / views * 100), 2) if views and views > 0 else None
 
@@ -127,6 +131,7 @@ def fetch_all_posts(session, user_id):
                 "likes": likes,
                 "comments": comments,
                 "engagement_rate": eng_rate,
+                "thumbnail_url": thumbnail_url,
             })
 
         print(f"  📄 Page {page}: {len(items)} posts (total: {len(posts)})")
@@ -148,17 +153,18 @@ def save_to_db(conn, posts):
     saved = 0
     for p in posts:
         cursor.execute("""
-            INSERT INTO instagram_posts (url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO instagram_posts (url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(url) DO UPDATE SET
                 views = excluded.views,
                 likes = excluded.likes,
                 comments = excluded.comments,
                 engagement_rate = excluded.engagement_rate,
+                thumbnail_url = excluded.thumbnail_url,
                 fetched_at = CURRENT_TIMESTAMP
         """, (p["url"], p["shortcode"], p["type"], p["caption"],
               p["published_at"], p["views"], p["likes"], p["comments"],
-              p["engagement_rate"]))
+              p["engagement_rate"], p["thumbnail_url"]))
         saved += 1
     conn.commit()
     return saved

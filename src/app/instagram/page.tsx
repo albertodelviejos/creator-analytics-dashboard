@@ -16,6 +16,7 @@ interface InstagramPost {
   likes: number;
   comments: number;
   engagement_rate: number | null;
+  thumbnail_url: string | null;
 }
 
 function getData() {
