@@ -76,10 +76,40 @@ function migrate(db: Database.Database) {
 
     CREATE TABLE IF NOT EXISTS competitors (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      platform TEXT NOT NULL,
-      handle TEXT NOT NULL,
+      name TEXT NOT NULL,
+      instagram_handle TEXT,
+      youtube_handle TEXT,
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS competitor_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      competitor_id INTEGER NOT NULL,
+      platform TEXT NOT NULL CHECK(platform IN ('instagram', 'youtube')),
+      post_id TEXT NOT NULL,
+      title TEXT,
+      post_type TEXT,
+      url TEXT,
+      published_at TEXT,
+      views INTEGER DEFAULT 0,
+      likes INTEGER DEFAULT 0,
+      comments INTEGER DEFAULT 0,
+      engagement_rate REAL,
+      thumbnail_url TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (competitor_id) REFERENCES competitors(id) ON DELETE CASCADE,
+      UNIQUE(competitor_id, platform, post_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS competitor_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      competitor_id INTEGER NOT NULL,
+      platform TEXT NOT NULL,
+      followers INTEGER,
+      total_posts INTEGER,
+      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (competitor_id) REFERENCES competitors(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS instagram_content (

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -34,6 +35,7 @@ export default function RootLayout({
             <div className="p-8">{children}</div>
           </main>
         </div>
+        <Toaster richColors />
       </body>
     </html>
   );
