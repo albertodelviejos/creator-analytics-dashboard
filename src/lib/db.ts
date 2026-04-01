@@ -112,6 +112,21 @@ function migrate(db: Database.Database) {
       FOREIGN KEY (competitor_id) REFERENCES competitors(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS news_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guid TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT,
+      url TEXT NOT NULL,
+      source TEXT NOT NULL,
+      topic TEXT CHECK(topic IN ('tools', 'research', 'business')) DEFAULT 'tools',
+      image_url TEXT,
+      published_at TEXT,
+      read INTEGER DEFAULT 0,
+      bookmarked INTEGER DEFAULT 0,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS instagram_content (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
