@@ -1,0 +1,14 @@
+
+> creator-analytics-dashboard@0.1.0 dev
+> next dev -p 3100
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3100
+
+ ✓ Starting...
+ ✓ Ready in 1209ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.8s (1567 modules)
+ GET / 200 in 3038ms
+ ✓ Compiled in 204ms (767 modules)
+[?25h
