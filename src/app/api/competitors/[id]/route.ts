@@ -49,7 +49,7 @@ export async function PATCH(
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  for (const key of ["name", "instagram_handle", "youtube_handle", "notes"]) {
+  for (const key of ["name", "instagram_handle", "youtube_handle", "x_handle", "threads_handle", "notes"]) {
     if (key in body) {
       fields.push(`${key} = ?`);
       values.push(body[key]);

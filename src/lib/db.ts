@@ -143,5 +143,77 @@ function migrate(db: Database.Database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS x_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tweet_id TEXT UNIQUE NOT NULL,
+      text TEXT NOT NULL,
+      post_type TEXT CHECK(post_type IN ('tweet', 'reply', 'retweet', 'quote', 'thread')) DEFAULT 'tweet',
+      published_at TEXT NOT NULL,
+      impressions INTEGER DEFAULT 0,
+      likes INTEGER DEFAULT 0,
+      retweets INTEGER DEFAULT 0,
+      replies INTEGER DEFAULT 0,
+      bookmarks INTEGER DEFAULT 0,
+      engagement_rate REAL,
+      url TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS x_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      text TEXT,
+      post_type TEXT CHECK(post_type IN ('tweet', 'thread', 'reply', 'quote')) DEFAULT 'tweet',
+      status TEXT CHECK(status IN ('backlog', 'draft', 'scheduled', 'published')) DEFAULT 'backlog',
+      scheduled_at TEXT,
+      published_at TEXT,
+      hashtags TEXT,
+      notes TEXT,
+      priority INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS threads_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id TEXT UNIQUE NOT NULL,
+      text TEXT NOT NULL,
+      post_type TEXT CHECK(post_type IN ('text', 'image', 'video', 'carousel')) DEFAULT 'text',
+      published_at TEXT NOT NULL,
+      likes INTEGER DEFAULT 0,
+      replies INTEGER DEFAULT 0,
+      reposts INTEGER DEFAULT 0,
+      quotes INTEGER DEFAULT 0,
+      views INTEGER DEFAULT 0,
+      engagement_rate REAL,
+      url TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS threads_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      text TEXT,
+      post_type TEXT CHECK(post_type IN ('text', 'image', 'video', 'carousel')) DEFAULT 'text',
+      status TEXT CHECK(status IN ('backlog', 'draft', 'scheduled', 'published')) DEFAULT 'backlog',
+      scheduled_at TEXT,
+      published_at TEXT,
+      hashtags TEXT,
+      notes TEXT,
+      priority INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  // Add x_handle and threads_handle columns to competitors if they don't exist
+  const competitorCols = db.prepare("PRAGMA table_info(competitors)").all() as Array<{ name: string }>;
+  const colNames = competitorCols.map((c) => c.name);
+  if (!colNames.includes("x_handle")) {
+    db.exec("ALTER TABLE competitors ADD COLUMN x_handle TEXT");
+  }
+  if (!colNames.includes("threads_handle")) {
+    db.exec("ALTER TABLE competitors ADD COLUMN threads_handle TEXT");
+  }
 }

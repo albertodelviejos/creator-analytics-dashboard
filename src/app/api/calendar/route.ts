@@ -5,7 +5,7 @@ interface CalendarItem {
   id: string;
   title: string;
   date: string;
-  platform: "instagram" | "youtube";
+  platform: "instagram" | "youtube" | "x" | "threads";
   type: string;
   status: "published" | "scheduled" | "draft";
   url: string | null;
@@ -134,6 +134,80 @@ export async function GET(request: NextRequest) {
         url: `https://youtube.com/watch?v=${v.video_id}`,
         views: v.views,
         likes: v.likes,
+      });
+    }
+  }
+
+  // X (Twitter) scheduled content
+  if (platform === "all" || platform === "x") {
+    const xContent = db
+      .prepare(
+        `SELECT id, title, text, post_type, status, scheduled_at, published_at
+         FROM x_content
+         WHERE status = 'scheduled'
+           AND scheduled_at IS NOT NULL
+           AND date(scheduled_at) >= date(?)
+           AND date(scheduled_at) <= date(?)
+         ORDER BY scheduled_at ASC`
+      )
+      .all(startDate, endDate) as Array<{
+      id: number;
+      title: string;
+      text: string | null;
+      post_type: string;
+      status: string;
+      scheduled_at: string;
+      published_at: string | null;
+    }>;
+
+    for (const c of xContent) {
+      items.push({
+        id: `x-content-${c.id}`,
+        title: c.title || c.text?.slice(0, 80) || "Untitled",
+        date: c.scheduled_at,
+        platform: "x",
+        type: c.post_type || "tweet",
+        status: "scheduled",
+        url: null,
+        views: null,
+        likes: null,
+      });
+    }
+  }
+
+  // Threads scheduled content
+  if (platform === "all" || platform === "threads") {
+    const threadsContent = db
+      .prepare(
+        `SELECT id, title, text, post_type, status, scheduled_at, published_at
+         FROM threads_content
+         WHERE status = 'scheduled'
+           AND scheduled_at IS NOT NULL
+           AND date(scheduled_at) >= date(?)
+           AND date(scheduled_at) <= date(?)
+         ORDER BY scheduled_at ASC`
+      )
+      .all(startDate, endDate) as Array<{
+      id: number;
+      title: string;
+      text: string | null;
+      post_type: string;
+      status: string;
+      scheduled_at: string;
+      published_at: string | null;
+    }>;
+
+    for (const c of threadsContent) {
+      items.push({
+        id: `threads-content-${c.id}`,
+        title: c.title || c.text?.slice(0, 80) || "Untitled",
+        date: c.scheduled_at,
+        platform: "threads",
+        type: c.post_type || "text",
+        status: "scheduled",
+        url: null,
+        views: null,
+        likes: null,
       });
     }
   }

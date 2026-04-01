@@ -11,7 +11,7 @@ export interface CalendarItem {
   id: string;
   title: string;
   date: string;
-  platform: "instagram" | "youtube";
+  platform: "instagram" | "youtube" | "x" | "threads";
   type: string;
   status: "published" | "scheduled" | "draft";
   url: string | null;
@@ -25,6 +25,14 @@ const TYPE_ICONS: Record<string, string> = {
   Post: "🖼️",
   Story: "📱",
   Video: "🎥",
+  tweet: "💬",
+  thread: "🧵",
+  reply: "↩️",
+  quote: "💭",
+  text: "📝",
+  image: "🖼️",
+  video: "🎥",
+  carousel: "📸",
 };
 
 function formatNumber(n: number): string {
@@ -46,24 +54,26 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-function chipClasses(platform: "instagram" | "youtube", status: string) {
+function chipClasses(platform: "instagram" | "youtube" | "x" | "threads", status: string) {
   if (platform === "instagram") {
-    if (status === "scheduled") {
-      return "border border-dashed border-violet-500/40 text-violet-400 bg-transparent";
-    }
-    if (status === "draft") {
-      return "border border-dotted border-violet-500/30 text-violet-500 bg-transparent opacity-60";
-    }
+    if (status === "scheduled") return "border border-dashed border-violet-500/40 text-violet-400 bg-transparent";
+    if (status === "draft") return "border border-dotted border-violet-500/30 text-violet-500 bg-transparent opacity-60";
     return "bg-violet-500/20 text-violet-300 border border-violet-500/30";
   }
-  // youtube
-  if (status === "scheduled") {
-    return "border border-dashed border-red-500/40 text-red-400 bg-transparent";
+  if (platform === "youtube") {
+    if (status === "scheduled") return "border border-dashed border-red-500/40 text-red-400 bg-transparent";
+    if (status === "draft") return "border border-dotted border-red-500/30 text-red-500 bg-transparent opacity-60";
+    return "bg-red-500/20 text-red-300 border border-red-500/30";
   }
-  if (status === "draft") {
-    return "border border-dotted border-red-500/30 text-red-500 bg-transparent opacity-60";
+  if (platform === "x") {
+    if (status === "scheduled") return "border border-dashed border-sky-500/40 text-sky-400 bg-transparent";
+    if (status === "draft") return "border border-dotted border-sky-500/30 text-sky-500 bg-transparent opacity-60";
+    return "bg-sky-500/20 text-sky-300 border border-sky-500/30";
   }
-  return "bg-red-500/20 text-red-300 border border-red-500/30";
+  // threads
+  if (status === "scheduled") return "border border-dashed border-fuchsia-500/40 text-fuchsia-400 bg-transparent";
+  if (status === "draft") return "border border-dotted border-fuchsia-500/30 text-fuchsia-500 bg-transparent opacity-60";
+  return "bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30";
 }
 
 export function CalendarChip({ item }: { item: CalendarItem }) {
@@ -89,12 +99,13 @@ export function CalendarChip({ item }: { item: CalendarItem }) {
               <span
                 className={cn(
                   "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
-                  item.platform === "instagram"
-                    ? "bg-violet-500/20 text-violet-300"
-                    : "bg-red-500/20 text-red-300"
+                  item.platform === "instagram" && "bg-violet-500/20 text-violet-300",
+                  item.platform === "youtube" && "bg-red-500/20 text-red-300",
+                  item.platform === "x" && "bg-sky-500/20 text-sky-300",
+                  item.platform === "threads" && "bg-fuchsia-500/20 text-fuchsia-300"
                 )}
               >
-                {item.platform === "instagram" ? "Instagram" : "YouTube"}
+                {item.platform === "instagram" ? "Instagram" : item.platform === "youtube" ? "YouTube" : item.platform === "x" ? "X" : "Threads"}
               </span>
               <span className="text-[10px] text-muted-foreground">
                 {icon} {item.type}

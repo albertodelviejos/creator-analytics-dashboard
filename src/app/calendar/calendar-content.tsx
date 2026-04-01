@@ -21,7 +21,7 @@ const MONTH_NAMES = [
   "December",
 ];
 
-type PlatformFilter = "all" | "instagram" | "youtube";
+type PlatformFilter = "all" | "instagram" | "youtube" | "x" | "threads";
 
 export function CalendarContent() {
   const today = new Date();
@@ -80,6 +80,8 @@ export function CalendarContent() {
     { value: "all", label: "All", color: "" },
     { value: "instagram", label: "Instagram", color: "bg-violet-500" },
     { value: "youtube", label: "YouTube", color: "bg-red-500" },
+    { value: "x", label: "X", color: "bg-sky-500" },
+    { value: "threads", label: "Threads", color: "bg-fuchsia-500" },
   ];
 
   return (
@@ -129,7 +131,13 @@ export function CalendarContent() {
                   "bg-violet-600 hover:bg-violet-700 text-white border-violet-600",
                 platform === f.value &&
                   f.value === "youtube" &&
-                  "bg-red-600 hover:bg-red-700 text-white border-red-600"
+                  "bg-red-600 hover:bg-red-700 text-white border-red-600",
+                platform === f.value &&
+                  f.value === "x" &&
+                  "bg-sky-600 hover:bg-sky-700 text-white border-sky-600",
+                platform === f.value &&
+                  f.value === "threads" &&
+                  "bg-fuchsia-600 hover:bg-fuchsia-700 text-white border-fuchsia-600"
               )}
             >
               {f.color && (

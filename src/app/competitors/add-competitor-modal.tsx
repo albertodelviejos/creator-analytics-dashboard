@@ -22,6 +22,8 @@ interface AddCompetitorModalProps {
     name: string;
     instagram_handle: string | null;
     youtube_handle: string | null;
+    x_handle: string | null;
+    threads_handle: string | null;
     notes: string | null;
   } | null;
 }
@@ -35,6 +37,8 @@ export function AddCompetitorModal({
   const [name, setName] = useState(editData?.name ?? "");
   const [igHandle, setIgHandle] = useState(editData?.instagram_handle ?? "");
   const [ytHandle, setYtHandle] = useState(editData?.youtube_handle ?? "");
+  const [xHandle, setXHandle] = useState(editData?.x_handle ?? "");
+  const [threadsHandle, setThreadsHandle] = useState(editData?.threads_handle ?? "");
   const [notes, setNotes] = useState(editData?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +62,8 @@ export function AddCompetitorModal({
           name: name.trim(),
           instagram_handle: igHandle.trim() || null,
           youtube_handle: ytHandle.trim() || null,
+          x_handle: xHandle.trim() || null,
+          threads_handle: threadsHandle.trim() || null,
           notes: notes.trim() || null,
         }),
       });
@@ -66,6 +72,8 @@ export function AddCompetitorModal({
         setName("");
         setIgHandle("");
         setYtHandle("");
+        setXHandle("");
+        setThreadsHandle("");
         setNotes("");
         onOpenChange(false);
         onSaved();
@@ -115,6 +123,30 @@ export function AddCompetitorModal({
                 value={ytHandle}
                 onChange={(e) => setYtHandle(e.target.value.replace("@", ""))}
                 placeholder="channelhandle"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="x-handle">X Handle</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">@</span>
+              <Input
+                id="x-handle"
+                value={xHandle}
+                onChange={(e) => setXHandle(e.target.value.replace("@", ""))}
+                placeholder="username"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="threads-handle">Threads Handle</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">@</span>
+              <Input
+                id="threads-handle"
+                value={threadsHandle}
+                onChange={(e) => setThreadsHandle(e.target.value.replace("@", ""))}
+                placeholder="username"
               />
             </div>
           </div>

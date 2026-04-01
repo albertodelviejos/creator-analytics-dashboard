@@ -86,6 +86,22 @@ export function CompetitorCard({
                   YT
                 </Badge>
               )}
+              {competitor.x_handle && (
+                <Badge
+                  variant="secondary"
+                  className="bg-sky-500/15 text-sky-400 text-xs"
+                >
+                  X
+                </Badge>
+              )}
+              {competitor.threads_handle && (
+                <Badge
+                  variant="secondary"
+                  className="bg-fuchsia-500/15 text-fuchsia-400 text-xs"
+                >
+                  TH
+                </Badge>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">

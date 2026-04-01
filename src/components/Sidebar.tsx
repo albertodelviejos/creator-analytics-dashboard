@@ -11,6 +11,8 @@ const navItems = [
   { href: "/analytics", label: "Analytics", icon: "📊" },
   { href: "/instagram", label: "Instagram", icon: "📸" },
   { href: "/youtube", label: "YouTube", icon: "🎬" },
+  { href: "/x", label: "X", icon: "𝕏" },
+  { href: "/threads", label: "Threads", icon: "🧵" },
   { href: "/calendar", label: "Calendar", icon: "📅" },
   { href: "/competitors", label: "Competitors", icon: "👥" },
   { href: "/news", label: "News", icon: "📰" },

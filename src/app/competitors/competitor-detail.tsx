@@ -53,6 +53,8 @@ interface CompetitorDetail {
   name: string;
   instagram_handle: string | null;
   youtube_handle: string | null;
+  x_handle: string | null;
+  threads_handle: string | null;
   notes: string | null;
   posts: Post[];
   snapshots: Snapshot[];

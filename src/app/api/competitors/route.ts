@@ -13,6 +13,8 @@ export function GET() {
     name: string;
     instagram_handle: string | null;
     youtube_handle: string | null;
+    x_handle: string | null;
+    threads_handle: string | null;
     notes: string | null;
     created_at: string;
   }>;
@@ -86,7 +88,7 @@ export function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, instagram_handle, youtube_handle, notes } = body;
+  const { name, instagram_handle, youtube_handle, x_handle, threads_handle, notes } = body;
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -95,13 +97,15 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   const result = db
     .prepare(
-      `INSERT INTO competitors (name, instagram_handle, youtube_handle, notes)
-       VALUES (?, ?, ?, ?)`
+      `INSERT INTO competitors (name, instagram_handle, youtube_handle, x_handle, threads_handle, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(
       name,
       instagram_handle || null,
       youtube_handle || null,
+      x_handle || null,
+      threads_handle || null,
       notes || null
     );
 

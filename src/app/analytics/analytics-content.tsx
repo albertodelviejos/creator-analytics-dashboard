@@ -73,7 +73,7 @@ interface AnalyticsData {
   }[];
 }
 
-type Platform = "all" | "instagram" | "youtube";
+type Platform = "all" | "instagram" | "youtube" | "x" | "threads";
 type Preset = "7d" | "30d" | "90d" | "all" | "custom";
 
 // ── Colors ─────────────────────────────────────────────────────────────────
@@ -238,6 +238,8 @@ export function AnalyticsContent() {
                 ["all", "All"],
                 ["instagram", "Instagram"],
                 ["youtube", "YouTube"],
+                ["x", "X"],
+                ["threads", "Threads"],
               ] as [Platform, string][]
             ).map(([key, label]) => (
               <button

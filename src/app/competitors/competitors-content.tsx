@@ -23,6 +23,8 @@ export interface Competitor {
   name: string;
   instagram_handle: string | null;
   youtube_handle: string | null;
+  x_handle: string | null;
+  threads_handle: string | null;
   notes: string | null;
   created_at: string;
   instagram_followers: number | null;
