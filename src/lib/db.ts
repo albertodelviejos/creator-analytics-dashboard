@@ -81,5 +81,21 @@ function migrate(db: Database.Database) {
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS instagram_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      caption TEXT,
+      post_type TEXT CHECK(post_type IN ('Reel', 'Post', 'Carrusel', 'Story')) DEFAULT 'Post',
+      status TEXT CHECK(status IN ('backlog', 'draft', 'scheduled', 'published')) DEFAULT 'backlog',
+      scheduled_at TEXT,
+      published_at TEXT,
+      media_url TEXT,
+      hashtags TEXT,
+      notes TEXT,
+      priority INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }

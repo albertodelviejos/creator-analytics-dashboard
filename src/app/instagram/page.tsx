@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { getDb } from "@/lib/db";
 import { formatNumber } from "@/lib/format";
 import { StatCard } from "@/components/StatCard";
-import { InstagramContent } from "./instagram-content";
+import { InstagramTabs } from "./instagram-tabs";
 
 interface InstagramPost {
   id: number;
@@ -42,7 +42,9 @@ export default function InstagramPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Instagram</h2>
-          <p className="text-muted-foreground">Post performance analytics</p>
+          <p className="text-muted-foreground">
+            Content management & analytics
+          </p>
         </div>
       </div>
 
@@ -69,7 +71,7 @@ export default function InstagramPage() {
         />
       </div>
 
-      <InstagramContent posts={posts} />
+      <InstagramTabs posts={posts} />
     </div>
   );
 }
