@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Fetch Instagram posts for a profile and save to SQLite.
-Uses instaloader session cookies + Instagram private API.
+Fetch ALL Instagram posts for a profile and save to SQLite.
+Uses instaloader session cookies + Instagram v1 feed API with pagination.
 """
 
 import instaloader
@@ -10,8 +10,14 @@ import sys
 import time
 import sqlite3
 import os
+from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "analytics.db")
+
+HEADERS = {
+    "User-Agent": "Instagram 275.0.0.27.98 Android",
+    "X-IG-App-ID": "936619743392459",
+}
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -35,79 +41,78 @@ def init_db():
     return conn
 
 def get_session():
-    """Load instaloader session and return requests session with cookies."""
     L = instaloader.Instaloader(
-        download_pictures=False,
-        download_videos=False,
-        download_video_thumbnails=False,
-        save_metadata=False,
+        download_pictures=False, download_videos=False,
+        download_video_thumbnails=False, save_metadata=False,
     )
     L.load_session_from_file('albertodviejo')
     return L.context._session
 
-def map_typename(typename, product_type=None):
-    if typename == "GraphSidecar":
+def map_media_type(media_type, product_type=None):
+    # media_type: 1=photo, 2=video, 8=carousel
+    if media_type == 8:
         return "Carrusel"
-    if typename == "GraphVideo" or product_type == "clips":
+    if media_type == 2:
         return "Reel"
     return "Post"
 
-def fetch_profile_posts(session, username, max_pages=5):
-    """Fetch posts via Instagram private API using session cookies."""
-    posts = []
-    end_cursor = None
-    page = 0
+def get_user_id(session, username):
+    resp = session.get(
+        "https://i.instagram.com/api/v1/users/web_profile_info/",
+        params={"username": username},
+        headers=HEADERS,
+    )
+    if resp.status_code != 200:
+        raise Exception(f"Profile fetch failed: {resp.status_code}")
+    data = resp.json()
+    user = data["data"]["user"]
+    user_id = user["id"]
+    followers = user.get("edge_followed_by", {}).get("count", 0)
+    total_posts = user.get("edge_owner_to_timeline_media", {}).get("count", 0)
+    print(f"📊 @{username}: {followers} followers, {total_posts} posts")
+    return user_id
 
-    while page < max_pages:
-        params = {"username": username}
-        if end_cursor:
-            # For pagination we need the graphql endpoint
-            pass
+def fetch_all_posts(session, user_id):
+    posts = []
+    max_id = ""
+    page = 1
+
+    while True:
+        params = {"count": 33}
+        if max_id:
+            params["max_id"] = max_id
 
         resp = session.get(
-            "https://i.instagram.com/api/v1/users/web_profile_info/",
+            f"https://i.instagram.com/api/v1/feed/user/{user_id}/",
             params=params,
-            headers={
-                "User-Agent": "Instagram 275.0.0.27.98 Android",
-                "X-IG-App-ID": "936619743392459",
-            }
+            headers=HEADERS,
         )
 
         if resp.status_code != 200:
-            print(f"❌ API error: {resp.status_code}")
+            print(f"  ❌ Feed error: {resp.status_code}")
             break
 
         data = resp.json()
-        user = data.get("data", {}).get("user", {})
+        items = data.get("items", [])
 
-        if page == 0:
-            followers = user.get("edge_followed_by", {}).get("count", 0)
-            total_posts = user.get("edge_owner_to_timeline_media", {}).get("count", 0)
-            print(f"📊 @{username}: {followers} followers, {total_posts} posts")
-
-        media = user.get("edge_owner_to_timeline_media", {})
-        edges = media.get("edges", [])
-
-        if not edges:
+        if not items:
             break
 
-        for edge in edges:
-            node = edge["node"]
-            shortcode = node["shortcode"]
-            typename = node.get("__typename", "")
-            product_type = node.get("product_type")
-            post_type = map_typename(typename, product_type)
+        for item in items:
+            shortcode = item.get("code", "")
+            media_type = item.get("media_type", 1)
+            product_type = item.get("product_type")
+            post_type = map_media_type(media_type, product_type)
 
-            caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
-            caption = (caption_edges[0]["node"]["text"][:150] if caption_edges else "").replace('\n', ' ')
+            caption_obj = item.get("caption")
+            caption = (caption_obj.get("text", "")[:150] if caption_obj else "").replace('\n', ' ')
 
-            timestamp = node.get("taken_at_timestamp", 0)
-            from datetime import datetime
+            timestamp = item.get("taken_at", 0)
             published_at = datetime.utcfromtimestamp(timestamp).isoformat() if timestamp else ""
 
-            views = node.get("video_view_count") or node.get("video_play_count")
-            likes = node.get("edge_media_preview_like", {}).get("count", 0)
-            comments = node.get("edge_media_to_comment", {}).get("count", 0)
+            views = item.get("play_count") or item.get("view_count")
+            likes = item.get("like_count", 0)
+            comments = item.get("comment_count", 0)
 
             total = likes + comments
             eng_rate = round((total / views * 100), 2) if views and views > 0 else None
@@ -124,103 +129,17 @@ def fetch_profile_posts(session, username, max_pages=5):
                 "engagement_rate": eng_rate,
             })
 
-        # Check pagination
-        page_info = media.get("page_info", {})
-        has_next = page_info.get("has_next_page", False)
-        end_cursor = page_info.get("end_cursor")
+        print(f"  📄 Page {page}: {len(items)} posts (total: {len(posts)})")
 
-        if not has_next or not end_cursor:
+        more = data.get("more_available", False)
+        next_max_id = data.get("next_max_id")
+
+        if not more or not next_max_id:
             break
 
-        # For next pages, use graphql query
+        max_id = next_max_id
         page += 1
-        if has_next and end_cursor:
-            user_id = user.get("id")
-            if user_id:
-                posts.extend(fetch_next_page(session, user_id, end_cursor, max_pages - page))
-            break
-
         time.sleep(2)
-
-    return posts
-
-def fetch_next_page(session, user_id, end_cursor, remaining_pages):
-    """Fetch additional pages of posts via graphql."""
-    posts = []
-
-    for _ in range(remaining_pages):
-        variables = json.dumps({
-            "id": user_id,
-            "first": 12,
-            "after": end_cursor,
-        })
-
-        resp = session.get(
-            "https://www.instagram.com/graphql/query/",
-            params={
-                "query_hash": "e769aa130647d2571c27c44596cb68bd",
-                "variables": variables,
-            },
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "X-IG-App-ID": "936619743392459",
-                "X-Requested-With": "XMLHttpRequest",
-            }
-        )
-
-        if resp.status_code != 200:
-            print(f"  ⚠️ Pagination error: {resp.status_code}")
-            break
-
-        data = resp.json()
-        media = data.get("data", {}).get("user", {}).get("edge_owner_to_timeline_media", {})
-        edges = media.get("edges", [])
-
-        if not edges:
-            break
-
-        for edge in edges:
-            node = edge["node"]
-            shortcode = node["shortcode"]
-            typename = node.get("__typename", "")
-            product_type = node.get("product_type")
-            post_type = map_typename(typename, product_type)
-
-            caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
-            caption = (caption_edges[0]["node"]["text"][:150] if caption_edges else "").replace('\n', ' ')
-
-            timestamp = node.get("taken_at_timestamp", 0)
-            from datetime import datetime
-            published_at = datetime.utcfromtimestamp(timestamp).isoformat() if timestamp else ""
-
-            views = node.get("video_view_count") or node.get("video_play_count")
-            likes = node.get("edge_media_preview_like", {}).get("count", 0)
-            comments = node.get("edge_media_to_comment", {}).get("count", 0)
-
-            total = likes + comments
-            eng_rate = round((total / views * 100), 2) if views and views > 0 else None
-
-            posts.append({
-                "url": f"https://www.instagram.com/p/{shortcode}/",
-                "shortcode": shortcode,
-                "type": post_type,
-                "caption": caption,
-                "published_at": published_at,
-                "views": views,
-                "likes": likes,
-                "comments": comments,
-                "engagement_rate": eng_rate,
-            })
-
-        page_info = media.get("page_info", {})
-        has_next = page_info.get("has_next_page", False)
-        end_cursor = page_info.get("end_cursor")
-
-        if not has_next or not end_cursor:
-            break
-
-        print(f"  Fetched {len(posts)} more posts...")
-        time.sleep(3)
 
     return posts
 
@@ -247,13 +166,15 @@ def save_to_db(conn, posts):
 if __name__ == "__main__":
     username = sys.argv[1].replace('@', '') if len(sys.argv) > 1 else "albertodviejo"
 
-    print(f"🔄 Fetching Instagram posts for @{username}...")
+    print(f"🔄 Fetching ALL Instagram posts for @{username}...")
 
     session = get_session()
     print("✅ Session loaded")
 
-    posts = fetch_profile_posts(session, username)
-    print(f"\n📥 Found {len(posts)} posts")
+    user_id = get_user_id(session, username)
+    posts = fetch_all_posts(session, user_id)
+
+    print(f"\n📥 Found {len(posts)} posts total")
 
     if posts:
         conn = init_db()
