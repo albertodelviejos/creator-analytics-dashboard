@@ -27,6 +27,7 @@ function migrate(db: Database.Database) {
       likes INTEGER NOT NULL DEFAULT 0,
       comments INTEGER NOT NULL DEFAULT 0,
       engagement_rate REAL,
+      thumbnail_url TEXT,
       fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
