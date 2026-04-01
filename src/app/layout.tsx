@@ -30,7 +30,7 @@ export default function RootLayout({
       <body className="antialiased font-[family-name:var(--font-geist-sans)]">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 pl-60">
+          <main className="flex-1 pl-60 transition-all duration-200">
             <div className="p-8">{children}</div>
           </main>
         </div>
