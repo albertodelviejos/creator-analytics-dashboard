@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 interface CalendarItem {
   id: string;
@@ -29,23 +29,21 @@ export async function GET(request: NextRequest) {
   const year = parseInt(yearStr);
   const mon = parseInt(monthStr);
   const startDate = `${year}-${monthStr}-01`;
-  // Last day of month
   const lastDay = new Date(year, mon, 0).getDate();
   const endDate = `${year}-${monthStr}-${lastDay}`;
 
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const items: CalendarItem[] = [];
 
   // Instagram published posts
   if (platform === "all" || platform === "instagram") {
-    const igPosts = db
-      .prepare(
-        `SELECT id, type, caption, published_at, views, likes, url
-         FROM instagram_posts
-         WHERE date(published_at) >= date(?) AND date(published_at) <= date(?)
-         ORDER BY published_at ASC`
-      )
-      .all(startDate, endDate) as Array<{
+    const igPosts = await sql`
+      SELECT id, type, caption, published_at, views, likes, url
+      FROM instagram_posts
+      WHERE published_at::date >= ${startDate}::date AND published_at::date <= ${endDate}::date
+      ORDER BY published_at ASC
+    ` as Array<{
       id: number;
       type: string;
       caption: string | null;
@@ -70,17 +68,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Instagram content (scheduled items)
-    const igContent = db
-      .prepare(
-        `SELECT id, title, caption, post_type, status, scheduled_at, published_at
-         FROM instagram_content
-         WHERE status = 'scheduled'
-           AND scheduled_at IS NOT NULL
-           AND date(scheduled_at) >= date(?)
-           AND date(scheduled_at) <= date(?)
-         ORDER BY scheduled_at ASC`
-      )
-      .all(startDate, endDate) as Array<{
+    const igContent = await sql`
+      SELECT id, title, caption, post_type, status, scheduled_at, published_at
+      FROM instagram_content
+      WHERE status = 'scheduled'
+        AND scheduled_at IS NOT NULL
+        AND scheduled_at::date >= ${startDate}::date
+        AND scheduled_at::date <= ${endDate}::date
+      ORDER BY scheduled_at ASC
+    ` as Array<{
       id: number;
       title: string;
       caption: string | null;
@@ -107,14 +103,12 @@ export async function GET(request: NextRequest) {
 
   // YouTube published videos
   if (platform === "all" || platform === "youtube") {
-    const ytVideos = db
-      .prepare(
-        `SELECT id, video_id, title, published_at, views, likes
-         FROM youtube_videos
-         WHERE date(published_at) >= date(?) AND date(published_at) <= date(?)
-         ORDER BY published_at ASC`
-      )
-      .all(startDate, endDate) as Array<{
+    const ytVideos = await sql`
+      SELECT id, video_id, title, published_at, views, likes
+      FROM youtube_videos
+      WHERE published_at::date >= ${startDate}::date AND published_at::date <= ${endDate}::date
+      ORDER BY published_at ASC
+    ` as Array<{
       id: number;
       video_id: string;
       title: string;
@@ -140,17 +134,15 @@ export async function GET(request: NextRequest) {
 
   // X (Twitter) scheduled content
   if (platform === "all" || platform === "x") {
-    const xContent = db
-      .prepare(
-        `SELECT id, title, text, post_type, status, scheduled_at, published_at
-         FROM x_content
-         WHERE status = 'scheduled'
-           AND scheduled_at IS NOT NULL
-           AND date(scheduled_at) >= date(?)
-           AND date(scheduled_at) <= date(?)
-         ORDER BY scheduled_at ASC`
-      )
-      .all(startDate, endDate) as Array<{
+    const xContent = await sql`
+      SELECT id, title, text, post_type, status, scheduled_at, published_at
+      FROM x_content
+      WHERE status = 'scheduled'
+        AND scheduled_at IS NOT NULL
+        AND scheduled_at::date >= ${startDate}::date
+        AND scheduled_at::date <= ${endDate}::date
+      ORDER BY scheduled_at ASC
+    ` as Array<{
       id: number;
       title: string;
       text: string | null;
@@ -177,17 +169,15 @@ export async function GET(request: NextRequest) {
 
   // Threads scheduled content
   if (platform === "all" || platform === "threads") {
-    const threadsContent = db
-      .prepare(
-        `SELECT id, title, text, post_type, status, scheduled_at, published_at
-         FROM threads_content
-         WHERE status = 'scheduled'
-           AND scheduled_at IS NOT NULL
-           AND date(scheduled_at) >= date(?)
-           AND date(scheduled_at) <= date(?)
-         ORDER BY scheduled_at ASC`
-      )
-      .all(startDate, endDate) as Array<{
+    const threadsContent = await sql`
+      SELECT id, title, text, post_type, status, scheduled_at, published_at
+      FROM threads_content
+      WHERE status = 'scheduled'
+        AND scheduled_at IS NOT NULL
+        AND scheduled_at::date >= ${startDate}::date
+        AND scheduled_at::date <= ${endDate}::date
+      ORDER BY scheduled_at ASC
+    ` as Array<{
       id: number;
       title: string;
       text: string | null;

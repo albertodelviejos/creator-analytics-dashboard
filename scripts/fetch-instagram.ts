@@ -1,7 +1,4 @@
-import Database from "better-sqlite3";
-import path from "path";
-
-const DB_PATH = path.join(process.cwd(), "db", "analytics.db");
+import { getDb, ensureMigrated } from "../src/lib/db";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
@@ -26,7 +23,6 @@ function mapTypename(typename: string, productType?: string): "Reel" | "Post" | 
 }
 
 async function fetchUserPosts(username: string): Promise<InstagramPost[]> {
-  // First get user ID via web profile info
   const profileUrl = new URL("https://www.instagram.com/api/graphql");
   profileUrl.searchParams.set(
     "variables",
@@ -69,11 +65,9 @@ async function fetchUserPosts(username: string): Promise<InstagramPost[]> {
     const node = edge.node;
     const shortcode = node.shortcode;
 
-    // Fetch detailed data per post
     try {
       const detail = await fetchPostDetail(shortcode);
       posts.push(detail);
-      // Small delay to avoid rate limiting
       await new Promise((r) => setTimeout(r, 500));
     } catch (err) {
       console.warn(`  Skipping ${shortcode}: ${(err as Error).message}`);
@@ -85,10 +79,7 @@ async function fetchUserPosts(username: string): Promise<InstagramPost[]> {
 
 async function fetchPostDetail(shortcode: string): Promise<InstagramPost> {
   const graphql = new URL("https://www.instagram.com/api/graphql");
-  graphql.searchParams.set(
-    "variables",
-    JSON.stringify({ shortcode })
-  );
+  graphql.searchParams.set("variables", JSON.stringify({ shortcode }));
   graphql.searchParams.set("doc_id", "10015901848480474");
   graphql.searchParams.set("lsd", LSD_TOKEN);
 
@@ -122,9 +113,7 @@ async function fetchPostDetail(shortcode: string): Promise<InstagramPost> {
   const caption =
     item.edge_media_to_caption?.edges?.[0]?.node?.text?.slice(0, 150) || "";
 
-  const views =
-    item.video_play_count || item.video_view_count || null;
-
+  const views = item.video_play_count || item.video_view_count || null;
   const likes = item.edge_media_preview_like?.count || 0;
   const comments = item.edge_media_to_parent_comment?.count || 0;
 
@@ -155,60 +144,32 @@ async function main() {
   const posts = await fetchUserPosts(username);
   console.log(`Found ${posts.length} posts`);
 
-  // Open DB and migrate
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS instagram_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      url TEXT UNIQUE NOT NULL,
-      shortcode TEXT NOT NULL,
-      type TEXT CHECK(type IN ('Reel', 'Post', 'Carrusel')),
-      caption TEXT,
-      published_at TEXT NOT NULL,
-      views INTEGER,
-      likes INTEGER NOT NULL DEFAULT 0,
-      comments INTEGER NOT NULL DEFAULT 0,
-      engagement_rate REAL,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+  const sql = getDb();
+  await ensureMigrated();
 
-  const upsert = db.prepare(`
-    INSERT INTO instagram_posts (url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate, fetched_at)
-    VALUES (@url, @shortcode, @type, @caption, @published_at, @views, @likes, @comments, @engagement_rate, CURRENT_TIMESTAMP)
-    ON CONFLICT(url) DO UPDATE SET
-      views = @views,
-      likes = @likes,
-      comments = @comments,
-      engagement_rate = @engagement_rate,
-      fetched_at = CURRENT_TIMESTAMP
-  `);
+  for (const post of posts) {
+    const totalInteractions = post.likes + post.comments;
+    const engagementRate = post.views
+      ? (totalInteractions / post.views) * 100
+      : null;
 
-  const insertMany = db.transaction((posts: InstagramPost[]) => {
-    for (const post of posts) {
-      const totalInteractions = post.likes + post.comments;
-      const engagementRate = post.views
-        ? (totalInteractions / post.views) * 100
-        : null;
+    await sql`
+      INSERT INTO instagram_posts
+        (url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate, fetched_at)
+      VALUES
+        (${post.url}, ${post.shortcode}, ${post.type}, ${post.caption},
+         ${post.published_at}, ${post.views}, ${post.likes}, ${post.comments},
+         ${engagementRate}, NOW())
+      ON CONFLICT(url) DO UPDATE SET
+        views = EXCLUDED.views,
+        likes = EXCLUDED.likes,
+        comments = EXCLUDED.comments,
+        engagement_rate = EXCLUDED.engagement_rate,
+        fetched_at = NOW()
+    `;
+  }
 
-      upsert.run({
-        url: post.url,
-        shortcode: post.shortcode,
-        type: post.type,
-        caption: post.caption,
-        published_at: post.published_at,
-        views: post.views,
-        likes: post.likes,
-        comments: post.comments,
-        engagement_rate: engagementRate,
-      });
-    }
-  });
-
-  insertMany(posts);
   console.log(`Saved ${posts.length} posts to database`);
-  db.close();
 }
 
 main().catch((err) => {

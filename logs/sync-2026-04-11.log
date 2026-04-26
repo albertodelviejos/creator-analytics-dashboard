@@ -1,0 +1,79 @@
+=== Sync started at Sat Apr 11 08:00:05 EEST 2026 ===
+[YouTube] Starting...
+Fetching YouTube data for @albertodelviejo...
+Channel ID: UCB3OOCkwBjVJSUWZHFAEpRg
+Channel: 50 subs, 18023 views, 29 videos
+Found 29 recent videos
+Saved channel stats
+Saved 29 videos to database
+[YouTube] Done
+[Instagram] Starting...
+/Users/alberto/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+🔄 Fetching ALL Instagram posts for @albertodviejo...
+Loaded session from /Users/alberto/.config/instaloader/session-albertodviejo.
+✅ Session loaded
+📊 @albertodviejo: 1122 followers, 46 posts
+  📄 Page 1: 12 posts (total: 12)
+  📄 Page 2: 12 posts (total: 24)
+  📄 Page 3: 12 posts (total: 36)
+  ❌ Feed error: 401
+
+📥 Found 36 posts total
+💾 Saved 36 posts to DB
+📊 8 reels · 4 carruseles · 24 posts
+[Instagram] Done
+[Thumbnails] Caching...
+📥 36 posts with remote thumbnails to cache
+  ✅ C_r9GFOSUd0 (300KB)
+  ✅ C-z-DWXNE3D (117KB)
+  ✅ C-meLO1yl9h (188KB)
+  ✅ C-iTIuryyjb (303KB)
+  ✅ C-fYT5iy4Hm (376KB)
+  ✅ C8xfHVatitl (240KB)
+  ✅ C8rxNxwNPjY (468KB)
+  ✅ Cy3kEpXtIEL (387KB)
+  ✅ Cx28YFGNL5P (289KB)
+  ✅ CtXIMj1tSat (417KB)
+  ✅ Cqx2BN5NAEO (274KB)
+  ✅ CpFBHsIDGmq (199KB)
+💾 Cached 36/36 thumbnails
+[Thumbnails] Done
+[News] Syncing RSS feeds...
+{"synced":1072,"new":1072}
+[News] Done
+=== Sync completed at Sat Apr 11 08:00:44 EEST 2026 ===
+
+=== Sync started at Sat Apr 11 20:00:05 EEST 2026 ===
+[YouTube] Starting...
+Fetching YouTube data for @albertodelviejo...
+Channel ID: UCB3OOCkwBjVJSUWZHFAEpRg
+Channel: 50 subs, 18027 views, 29 videos
+Found 29 recent videos
+Saved channel stats
+Saved 29 videos to database
+[YouTube] Done
+[Instagram] Starting...
+/Users/alberto/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+🔄 Fetching ALL Instagram posts for @albertodviejo...
+Loaded session from /Users/alberto/.config/instaloader/session-albertodviejo.
+✅ Session loaded
+📊 @albertodviejo: 1122 followers, 46 posts
+  📄 Page 1: 12 posts (total: 12)
+  📄 Page 2: 12 posts (total: 24)
+  ❌ Feed error: 401
+
+📥 Found 24 posts total
+💾 Saved 24 posts to DB
+📊 8 reels · 4 carruseles · 12 posts
+[Instagram] Done
+[Thumbnails] Caching...
+📥 24 posts with remote thumbnails to cache
+💾 Cached 24/24 thumbnails
+[Thumbnails] Done
+[News] Syncing RSS feeds...
+{"synced":1072,"new":1072}
+[News] Done
+=== Sync completed at Sat Apr 11 20:00:32 EEST 2026 ===
+

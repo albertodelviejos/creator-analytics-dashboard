@@ -1,7 +1,5 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { getDb, ensureMigrated } from "../src/lib/db";
 
-const DB_PATH = path.join(process.cwd(), "db", "analytics.db");
 const API_KEY = process.env.YOUTUBE_API_KEY;
 
 interface YouTubeVideo {
@@ -89,7 +87,6 @@ function parseDuration(iso: string): string {
 async function getVideoDetails(videoIds: string[]): Promise<YouTubeVideo[]> {
   const videos: YouTubeVideo[] = [];
 
-  // YouTube API allows max 50 IDs per request
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50);
     const data = await fetchJson(
@@ -146,60 +143,34 @@ async function main() {
 
   const videos = await getVideoDetails(videoIds);
 
-  // Open DB and migrate
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS youtube_videos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      video_id TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      published_at TEXT NOT NULL,
-      views INTEGER DEFAULT 0,
-      likes INTEGER DEFAULT 0,
-      comments INTEGER DEFAULT 0,
-      duration TEXT,
-      thumbnail_url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS youtube_channel_stats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      subscribers INTEGER NOT NULL,
-      total_views INTEGER NOT NULL,
-      total_videos INTEGER NOT NULL,
-      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+  const sql = getDb();
+  await ensureMigrated();
 
   // Insert channel stats
-  db.prepare(
-    `INSERT INTO youtube_channel_stats (subscribers, total_views, total_videos)
-     VALUES (@subscribers, @total_views, @total_videos)`
-  ).run(channelStats);
+  await sql`
+    INSERT INTO youtube_channel_stats (subscribers, total_views, total_videos)
+    VALUES (${channelStats.subscribers}, ${channelStats.total_views}, ${channelStats.total_videos})
+  `;
   console.log("Saved channel stats");
 
   // Upsert videos
-  const upsert = db.prepare(`
-    INSERT INTO youtube_videos (video_id, title, description, published_at, views, likes, comments, duration, thumbnail_url, fetched_at)
-    VALUES (@video_id, @title, @description, @published_at, @views, @likes, @comments, @duration, @thumbnail_url, CURRENT_TIMESTAMP)
-    ON CONFLICT(video_id) DO UPDATE SET
-      views = @views,
-      likes = @likes,
-      comments = @comments,
-      fetched_at = CURRENT_TIMESTAMP
-  `);
+  for (const video of videos) {
+    await sql`
+      INSERT INTO youtube_videos
+        (video_id, title, description, published_at, views, likes, comments, duration, thumbnail_url, fetched_at)
+      VALUES
+        (${video.video_id}, ${video.title}, ${video.description}, ${video.published_at},
+         ${video.views}, ${video.likes}, ${video.comments}, ${video.duration},
+         ${video.thumbnail_url}, NOW())
+      ON CONFLICT(video_id) DO UPDATE SET
+        views = EXCLUDED.views,
+        likes = EXCLUDED.likes,
+        comments = EXCLUDED.comments,
+        fetched_at = NOW()
+    `;
+  }
 
-  const insertMany = db.transaction((videos: YouTubeVideo[]) => {
-    for (const video of videos) {
-      upsert.run(video);
-    }
-  });
-
-  insertMany(videos);
   console.log(`Saved ${videos.length} videos to database`);
-  db.close();
 }
 
 main().catch((err) => {

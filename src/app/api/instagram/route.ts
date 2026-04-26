@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-  const db = getDb();
-  const posts = db
-    .prepare(
-      "SELECT * FROM instagram_posts ORDER BY published_at DESC"
-    )
-    .all();
+export async function GET() {
+  const sql = getDb();
+  await ensureMigrated();
+  const posts = await sql`SELECT * FROM instagram_posts ORDER BY published_at DESC`;
   return NextResponse.json(posts);
 }

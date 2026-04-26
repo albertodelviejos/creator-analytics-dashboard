@@ -1,23 +1,29 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { neon } from '@neondatabase/serverless';
 
-const DB_PATH = path.join(process.cwd(), "db", "analytics.db");
-
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    migrate(db);
-  }
-  return db;
+export type SqlClient = ReturnType<typeof neon>;
+// Convenience cast for neon query results which return a union type
+export type Rows = Record<string, unknown>[];
+export function rows(result: unknown): Rows {
+  return result as Rows;
 }
 
-function migrate(db: Database.Database) {
-  db.exec(`
+let sql: SqlClient | null = null;
+let migrated = false;
+
+export function getDb(): SqlClient {
+  if (!sql) {
+    sql = neon(process.env.DATABASE_URL!);
+  }
+  return sql;
+}
+
+export async function ensureMigrated() {
+  if (migrated) return;
+  const db = getDb();
+
+  await db`
     CREATE TABLE IF NOT EXISTS instagram_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       url TEXT UNIQUE NOT NULL,
       shortcode TEXT NOT NULL,
       type TEXT CHECK(type IN ('Reel', 'Post', 'Carrusel')),
@@ -26,13 +32,15 @@ function migrate(db: Database.Database) {
       views INTEGER,
       likes INTEGER NOT NULL DEFAULT 0,
       comments INTEGER NOT NULL DEFAULT 0,
-      engagement_rate REAL,
+      engagement_rate DOUBLE PRECISION,
       thumbnail_url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS youtube_videos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       video_id TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
@@ -42,19 +50,23 @@ function migrate(db: Database.Database) {
       comments INTEGER DEFAULT 0,
       duration TEXT,
       thumbnail_url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS youtube_channel_stats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       subscribers INTEGER NOT NULL,
       total_views INTEGER NOT NULL,
       total_videos INTEGER NOT NULL,
-      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      recorded_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS linkedin_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       post_id TEXT UNIQUE,
       content TEXT,
       published_at TEXT,
@@ -63,29 +75,38 @@ function migrate(db: Database.Database) {
       likes INTEGER DEFAULT 0,
       comments INTEGER DEFAULT 0,
       shares INTEGER DEFAULT 0,
-      engagement_rate REAL,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      engagement_rate DOUBLE PRECISION,
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS linkedin_profile_stats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       followers INTEGER NOT NULL,
       connections INTEGER,
       profile_views INTEGER,
-      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      recorded_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS competitors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       instagram_handle TEXT,
       youtube_handle TEXT,
       notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS x_handle TEXT`;
+  await db`ALTER TABLE competitors ADD COLUMN IF NOT EXISTS threads_handle TEXT`;
+
+  await db`
     CREATE TABLE IF NOT EXISTS competitor_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       competitor_id INTEGER NOT NULL,
       platform TEXT NOT NULL CHECK(platform IN ('instagram', 'youtube')),
       post_id TEXT NOT NULL,
@@ -96,25 +117,29 @@ function migrate(db: Database.Database) {
       views INTEGER DEFAULT 0,
       likes INTEGER DEFAULT 0,
       comments INTEGER DEFAULT 0,
-      engagement_rate REAL,
+      engagement_rate DOUBLE PRECISION,
       thumbnail_url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      fetched_at TIMESTAMPTZ DEFAULT NOW(),
       FOREIGN KEY (competitor_id) REFERENCES competitors(id) ON DELETE CASCADE,
       UNIQUE(competitor_id, platform, post_id)
-    );
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS competitor_snapshots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       competitor_id INTEGER NOT NULL,
       platform TEXT NOT NULL,
       followers INTEGER,
       total_posts INTEGER,
-      recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      recorded_at TIMESTAMPTZ DEFAULT NOW(),
       FOREIGN KEY (competitor_id) REFERENCES competitors(id) ON DELETE CASCADE
-    );
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS news_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       guid TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
       summary TEXT,
@@ -125,11 +150,13 @@ function migrate(db: Database.Database) {
       published_at TEXT,
       read INTEGER DEFAULT 0,
       bookmarked INTEGER DEFAULT 0,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS instagram_content (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       caption TEXT,
       post_type TEXT CHECK(post_type IN ('Reel', 'Post', 'Carrusel', 'Story')) DEFAULT 'Post',
@@ -140,12 +167,14 @@ function migrate(db: Database.Database) {
       hashtags TEXT,
       notes TEXT,
       priority INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS x_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       tweet_id TEXT UNIQUE NOT NULL,
       text TEXT NOT NULL,
       post_type TEXT CHECK(post_type IN ('tweet', 'reply', 'retweet', 'quote', 'thread')) DEFAULT 'tweet',
@@ -155,13 +184,15 @@ function migrate(db: Database.Database) {
       retweets INTEGER DEFAULT 0,
       replies INTEGER DEFAULT 0,
       bookmarks INTEGER DEFAULT 0,
-      engagement_rate REAL,
+      engagement_rate DOUBLE PRECISION,
       url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS x_content (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       text TEXT,
       post_type TEXT CHECK(post_type IN ('tweet', 'thread', 'reply', 'quote')) DEFAULT 'tweet',
@@ -171,12 +202,14 @@ function migrate(db: Database.Database) {
       hashtags TEXT,
       notes TEXT,
       priority INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS threads_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       post_id TEXT UNIQUE NOT NULL,
       text TEXT NOT NULL,
       post_type TEXT CHECK(post_type IN ('text', 'image', 'video', 'carousel')) DEFAULT 'text',
@@ -186,13 +219,15 @@ function migrate(db: Database.Database) {
       reposts INTEGER DEFAULT 0,
       quotes INTEGER DEFAULT 0,
       views INTEGER DEFAULT 0,
-      engagement_rate REAL,
+      engagement_rate DOUBLE PRECISION,
       url TEXT,
-      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
+  await db`
     CREATE TABLE IF NOT EXISTS threads_content (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       text TEXT,
       post_type TEXT CHECK(post_type IN ('text', 'image', 'video', 'carousel')) DEFAULT 'text',
@@ -202,18 +237,10 @@ function migrate(db: Database.Database) {
       hashtags TEXT,
       notes TEXT,
       priority INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 
-  // Add x_handle and threads_handle columns to competitors if they don't exist
-  const competitorCols = db.prepare("PRAGMA table_info(competitors)").all() as Array<{ name: string }>;
-  const colNames = competitorCols.map((c) => c.name);
-  if (!colNames.includes("x_handle")) {
-    db.exec("ALTER TABLE competitors ADD COLUMN x_handle TEXT");
-  }
-  if (!colNames.includes("threads_handle")) {
-    db.exec("ALTER TABLE competitors ADD COLUMN threads_handle TEXT");
-  }
+  migrated = true;
 }

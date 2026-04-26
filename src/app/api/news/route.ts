@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 import Parser from "rss-parser";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +26,9 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max).trimEnd() + "…";
 }
 
-export function GET(request: NextRequest) {
-  const db = getDb();
+export async function GET(request: NextRequest) {
+  const sql = getDb();
+  await ensureMigrated();
   const { searchParams } = request.nextUrl;
 
   const topic = searchParams.get("topic") || "all";
@@ -36,57 +37,52 @@ export function GET(request: NextRequest) {
   const sort = searchParams.get("sort") || "newest";
   const limit = parseInt(searchParams.get("limit") || "20", 10);
   const offset = parseInt(searchParams.get("offset") || "0", 10);
-
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
-
-  if (topic !== "all") {
-    conditions.push("topic = ?");
-    params.push(topic);
-  }
-  if (search) {
-    conditions.push("title LIKE ?");
-    params.push(`%${search}%`);
-  }
-  if (bookmarked === "1") {
-    conditions.push("bookmarked = 1");
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const order = sort === "oldest" ? "ASC" : "DESC";
 
-  const items = db
-    .prepare(`SELECT * FROM news_items ${where} ORDER BY published_at ${order} LIMIT ? OFFSET ?`)
-    .all(...params, limit, offset);
+  type Row = Record<string, unknown>;
 
-  const total = db
-    .prepare(`SELECT COUNT(*) as count FROM news_items ${where}`)
-    .get(...params) as { count: number };
+  // Build query with all optional filters
+  let items: Row[];
+  let totalRows: Row[];
 
-  const lastSync = db
-    .prepare("SELECT MAX(fetched_at) as last_sync FROM news_items")
-    .get() as { last_sync: string | null };
+  if (topic !== "all" && search && bookmarked === "1") {
+    items = await sql`SELECT * FROM news_items WHERE topic = ${topic} AND title ILIKE ${"%" + search + "%"} AND bookmarked = 1 ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE topic = ${topic} AND title ILIKE ${"%" + search + "%"} AND bookmarked = 1` as unknown as Row[];
+  } else if (topic !== "all" && search) {
+    items = await sql`SELECT * FROM news_items WHERE topic = ${topic} AND title ILIKE ${"%" + search + "%"} ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE topic = ${topic} AND title ILIKE ${"%" + search + "%"}` as unknown as Row[];
+  } else if (topic !== "all" && bookmarked === "1") {
+    items = await sql`SELECT * FROM news_items WHERE topic = ${topic} AND bookmarked = 1 ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE topic = ${topic} AND bookmarked = 1` as unknown as Row[];
+  } else if (search && bookmarked === "1") {
+    items = await sql`SELECT * FROM news_items WHERE title ILIKE ${"%" + search + "%"} AND bookmarked = 1 ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE title ILIKE ${"%" + search + "%"} AND bookmarked = 1` as unknown as Row[];
+  } else if (topic !== "all") {
+    items = await sql`SELECT * FROM news_items WHERE topic = ${topic} ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE topic = ${topic}` as unknown as Row[];
+  } else if (search) {
+    items = await sql`SELECT * FROM news_items WHERE title ILIKE ${"%" + search + "%"} ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE title ILIKE ${"%" + search + "%"}` as unknown as Row[];
+  } else if (bookmarked === "1") {
+    items = await sql`SELECT * FROM news_items WHERE bookmarked = 1 ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items WHERE bookmarked = 1` as unknown as Row[];
+  } else {
+    items = await sql`SELECT * FROM news_items ORDER BY published_at ${sql.unsafe(order)} LIMIT ${limit} OFFSET ${offset}` as unknown as Row[];
+    totalRows = await sql`SELECT COUNT(*) as count FROM news_items` as unknown as Row[];
+  }
 
-  return NextResponse.json({
-    items,
-    total: total.count,
-    lastSync: lastSync.last_sync,
-  });
+  const lastSyncRow = await sql`SELECT MAX(fetched_at) as last_sync FROM news_items` as unknown as Row[];
+
+  const total = (totalRows[0] as { count: string }).count;
+  const lastSync = (lastSyncRow[0] as { last_sync: string | null }).last_sync;
+
+  return NextResponse.json({ items, total: parseInt(total, 10), lastSync });
 }
 
 export async function POST() {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const parser = new Parser();
-
-  const upsert = db.prepare(`
-    INSERT INTO news_items (guid, title, summary, url, source, topic, image_url, published_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(guid) DO UPDATE SET
-      title = excluded.title,
-      summary = excluded.summary,
-      image_url = excluded.image_url,
-      fetched_at = CURRENT_TIMESTAMP
-  `);
 
   let synced = 0;
   let newItems = 0;
@@ -108,11 +104,18 @@ export async function POST() {
           ? new Date(item.pubDate).toISOString()
           : item.isoDate || null;
 
-        const result = upsert.run(
-          guid, title, summary, link, feed.source, feed.topic, imageUrl, publishedAt
-        );
+        const result = await sql`
+          INSERT INTO news_items (guid, title, summary, url, source, topic, image_url, published_at)
+          VALUES (${guid}, ${title}, ${summary}, ${link}, ${feed.source}, ${feed.topic}, ${imageUrl}, ${publishedAt})
+          ON CONFLICT(guid) DO UPDATE SET
+            title = EXCLUDED.title,
+            summary = EXCLUDED.summary,
+            image_url = EXCLUDED.image_url,
+            fetched_at = NOW()
+          RETURNING id
+        ` as unknown as Record<string, unknown>[];
         synced++;
-        if (result.changes > 0 && result.lastInsertRowid) {
+        if (result.length > 0) {
           newItems++;
         }
       }

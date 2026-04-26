@@ -1,0 +1,62 @@
+=== Sync started at Mon Apr 20 08:00:04 EEST 2026 ===
+[YouTube] Starting...
+Fetching YouTube data for @albertodelviejo...
+Channel ID: UCB3OOCkwBjVJSUWZHFAEpRg
+Channel: 50 subs, 18039 views, 29 videos
+Found 29 recent videos
+Saved channel stats
+Saved 29 videos to database
+[YouTube] Done
+[Instagram] Starting...
+/Users/alberto/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+🔄 Fetching ALL Instagram posts for @albertodviejo...
+Loaded session from /Users/alberto/.config/instaloader/session-albertodviejo.
+✅ Session loaded
+📊 @albertodviejo: 1119 followers, 46 posts
+  📄 Page 1: 12 posts (total: 12)
+  ❌ Feed error: 401
+
+📥 Found 12 posts total
+💾 Saved 12 posts to DB
+📊 7 reels · 1 carruseles · 4 posts
+[Instagram] Done
+[Thumbnails] Caching...
+📥 12 posts with remote thumbnails to cache
+💾 Cached 12/12 thumbnails
+[Thumbnails] Done
+[News] Syncing RSS feeds...
+{"synced":1080,"new":1080}
+[News] Done
+=== Sync completed at Mon Apr 20 08:00:31 EEST 2026 ===
+
+=== Sync started at Mon Apr 20 20:00:05 EEST 2026 ===
+[YouTube] Starting...
+Fetching YouTube data for @albertodelviejo...
+Channel ID: UCB3OOCkwBjVJSUWZHFAEpRg
+Channel: 50 subs, 18039 views, 29 videos
+Found 29 recent videos
+Saved channel stats
+Saved 29 videos to database
+[YouTube] Done
+[Instagram] Starting...
+/Users/alberto/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+🔄 Fetching ALL Instagram posts for @albertodviejo...
+Loaded session from /Users/alberto/.config/instaloader/session-albertodviejo.
+✅ Session loaded
+📊 @albertodviejo: 1120 followers, 46 posts
+  ❌ Feed error: 401
+
+📥 Found 0 posts total
+⚠️ No posts found
+[Instagram] Done
+[Thumbnails] Caching...
+📥 0 posts with remote thumbnails to cache
+💾 Cached 0/0 thumbnails
+[Thumbnails] Done
+[News] Syncing RSS feeds...
+{"synced":1081,"new":1081}
+[News] Done
+=== Sync completed at Mon Apr 20 20:00:29 EEST 2026 ===
+

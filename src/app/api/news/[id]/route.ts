@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export function PATCH(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  return request.json().then((body: { read?: boolean; bookmarked?: boolean }) => {
-    const db = getDb();
-    const id = parseInt(params.id, 10);
+  const sql = getDb();
+  await ensureMigrated();
+  const id = parseInt(params.id, 10);
+  const body: { read?: boolean; bookmarked?: boolean } = await request.json();
 
-    if (body.read !== undefined) {
-      db.prepare("UPDATE news_items SET read = ? WHERE id = ?").run(body.read ? 1 : 0, id);
-    }
-    if (body.bookmarked !== undefined) {
-      db.prepare("UPDATE news_items SET bookmarked = ? WHERE id = ?").run(body.bookmarked ? 1 : 0, id);
-    }
+  if (body.read !== undefined) {
+    await sql`UPDATE news_items SET read = ${body.read ? 1 : 0} WHERE id = ${id}`;
+  }
+  if (body.bookmarked !== undefined) {
+    await sql`UPDATE news_items SET bookmarked = ${body.bookmarked ? 1 : 0} WHERE id = ${id}`;
+  }
 
-    const item = db.prepare("SELECT * FROM news_items WHERE id = ?").get(id);
-    return NextResponse.json(item);
-  });
+  const rows = await sql`SELECT * FROM news_items WHERE id = ${id}` as unknown as Record<string, unknown>[];
+  return NextResponse.json(rows[0]);
 }

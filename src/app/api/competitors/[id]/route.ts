@@ -1,85 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export function GET(
+export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
 
-  const competitor = db
-    .prepare("SELECT * FROM competitors WHERE id = ?")
-    .get(id) as Record<string, unknown> | undefined;
-
-  if (!competitor) {
+  const competitors = await sql`SELECT * FROM competitors WHERE id = ${id}` as unknown as Record<string, unknown>[];
+  if (!competitors[0]) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const posts = db
-    .prepare(
-      "SELECT * FROM competitor_posts WHERE competitor_id = ? ORDER BY published_at DESC"
-    )
-    .all(id);
+  const posts = await sql`
+    SELECT * FROM competitor_posts WHERE competitor_id = ${id} ORDER BY published_at DESC
+  ` as unknown as Record<string, unknown>[];
 
-  const snapshots = db
-    .prepare(
-      "SELECT * FROM competitor_snapshots WHERE competitor_id = ? ORDER BY recorded_at DESC"
-    )
-    .all(id);
+  const snapshots = await sql`
+    SELECT * FROM competitor_snapshots WHERE competitor_id = ${id} ORDER BY recorded_at DESC
+  ` as unknown as Record<string, unknown>[];
 
-  return NextResponse.json({ ...competitor, posts, snapshots });
+  return NextResponse.json({ ...competitors[0], posts, snapshots });
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
   const body = await request.json();
 
-  const existing = db.prepare("SELECT * FROM competitors WHERE id = ?").get(id);
-  if (!existing) {
+  const existing = await sql`SELECT * FROM competitors WHERE id = ${id}` as unknown as Record<string, unknown>[];
+  if (!existing[0]) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const fields: string[] = [];
-  const values: unknown[] = [];
+  const rec = existing[0] as Record<string, unknown>;
+  const name = "name" in body ? body.name : rec.name;
+  const instagram_handle = "instagram_handle" in body ? body.instagram_handle : rec.instagram_handle;
+  const youtube_handle = "youtube_handle" in body ? body.youtube_handle : rec.youtube_handle;
+  const x_handle = "x_handle" in body ? body.x_handle : rec.x_handle;
+  const threads_handle = "threads_handle" in body ? body.threads_handle : rec.threads_handle;
+  const notes = "notes" in body ? body.notes : rec.notes;
 
-  for (const key of ["name", "instagram_handle", "youtube_handle", "x_handle", "threads_handle", "notes"]) {
-    if (key in body) {
-      fields.push(`${key} = ?`);
-      values.push(body[key]);
-    }
-  }
+  const updated = await sql`
+    UPDATE competitors SET
+      name = ${name},
+      instagram_handle = ${instagram_handle},
+      youtube_handle = ${youtube_handle},
+      x_handle = ${x_handle},
+      threads_handle = ${threads_handle},
+      notes = ${notes}
+    WHERE id = ${id}
+    RETURNING *
+  ` as unknown as Record<string, unknown>[];
 
-  if (fields.length === 0) {
-    return NextResponse.json({ error: "No fields to update" }, { status: 400 });
-  }
-
-  values.push(id);
-  db.prepare(`UPDATE competitors SET ${fields.join(", ")} WHERE id = ?`).run(
-    ...values
-  );
-
-  const updated = db.prepare("SELECT * FROM competitors WHERE id = ?").get(id);
-  return NextResponse.json(updated);
+  return NextResponse.json(updated[0]);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
 
-  // Delete cascade manually since SQLite FK enforcement needs PRAGMA
-  db.prepare("DELETE FROM competitor_posts WHERE competitor_id = ?").run(id);
-  db.prepare("DELETE FROM competitor_snapshots WHERE competitor_id = ?").run(id);
-  db.prepare("DELETE FROM competitors WHERE id = ?").run(id);
+  await sql`DELETE FROM competitor_posts WHERE competitor_id = ${id}`;
+  await sql`DELETE FROM competitor_snapshots WHERE competitor_id = ${id}`;
+  await sql`DELETE FROM competitors WHERE id = ${id}`;
 
   return NextResponse.json({ success: true });
 }

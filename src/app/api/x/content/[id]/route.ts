@@ -1,85 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
 
   if (isNaN(id)) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  const existing = db
-    .prepare("SELECT * FROM x_content WHERE id = ?")
-    .get(id);
-
-  if (!existing) {
+  const existing = await sql`SELECT * FROM x_content WHERE id = ${id}` as unknown as Record<string, unknown>[];
+  if (!existing[0]) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const body = await request.json();
-  const allowedFields = [
-    "title",
-    "text",
-    "post_type",
-    "status",
-    "scheduled_at",
-    "published_at",
-    "hashtags",
-    "notes",
-    "priority",
-  ];
+  const rec = existing[0] as Record<string, unknown>;
 
-  const updates: string[] = [];
-  const values: unknown[] = [];
+  const title = "title" in body ? body.title : rec.title;
+  const text = "text" in body ? body.text : rec.text;
+  const post_type = "post_type" in body ? body.post_type : rec.post_type;
+  const status = "status" in body ? body.status : rec.status;
+  const scheduled_at = "scheduled_at" in body ? body.scheduled_at : rec.scheduled_at;
+  const published_at = "published_at" in body ? body.published_at : rec.published_at;
+  const hashtags = "hashtags" in body ? body.hashtags : rec.hashtags;
+  const notes = "notes" in body ? body.notes : rec.notes;
+  const priority = "priority" in body ? body.priority : rec.priority;
 
-  for (const field of allowedFields) {
-    if (field in body) {
-      updates.push(`${field} = ?`);
-      values.push(body[field]);
-    }
-  }
+  const updated = await sql`
+    UPDATE x_content SET
+      title = ${title},
+      text = ${text},
+      post_type = ${post_type},
+      status = ${status},
+      scheduled_at = ${scheduled_at},
+      published_at = ${published_at},
+      hashtags = ${hashtags},
+      notes = ${notes},
+      priority = ${priority},
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  ` as unknown as Record<string, unknown>[];
 
-  if (updates.length === 0) {
-    return NextResponse.json(
-      { error: "No valid fields to update" },
-      { status: 400 }
-    );
-  }
-
-  updates.push("updated_at = CURRENT_TIMESTAMP");
-  values.push(id);
-
-  db.prepare(
-    `UPDATE x_content SET ${updates.join(", ")} WHERE id = ?`
-  ).run(...values);
-
-  const updated = db
-    .prepare("SELECT * FROM x_content WHERE id = ?")
-    .get(id);
-
-  return NextResponse.json(updated);
+  return NextResponse.json(updated[0]);
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
 
   if (isNaN(id)) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  const result = db
-    .prepare("DELETE FROM x_content WHERE id = ?")
-    .run(id);
+  const result = await sql`DELETE FROM x_content WHERE id = ${id} RETURNING id` as unknown as Record<string, unknown>[];
 
-  if (result.changes === 0) {
+  if (result.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

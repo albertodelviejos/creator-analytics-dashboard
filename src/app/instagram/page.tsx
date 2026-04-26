@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 import { formatNumber } from "@/lib/format";
 import { StatCard } from "@/components/StatCard";
 import { InstagramTabs } from "./instagram-tabs";
@@ -19,15 +19,14 @@ interface InstagramPost {
   thumbnail_url: string | null;
 }
 
-function getData() {
-  const db = getDb();
-  return db
-    .prepare("SELECT * FROM instagram_posts ORDER BY published_at DESC")
-    .all() as InstagramPost[];
+async function getData() {
+  const sql = getDb();
+  await ensureMigrated();
+  return await sql`SELECT * FROM instagram_posts ORDER BY published_at DESC` as InstagramPost[];
 }
 
-export default function InstagramPage() {
-  const posts = getData();
+export default async function InstagramPage() {
+  const posts = await getData();
 
   const totalPosts = posts.length;
   const totalLikes = posts.reduce((s, p) => s + p.likes, 0);

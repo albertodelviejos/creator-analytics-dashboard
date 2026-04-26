@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const db = getDb();
-  const competitors = db
-    .prepare("SELECT id, name FROM competitors")
-    .all() as Array<{ id: number; name: string }>;
+  const sql = getDb();
+  await ensureMigrated();
+  const competitors = await sql`SELECT id, name FROM competitors` as Array<{ id: number; name: string }>;
 
   const results: Array<{ id: number; name: string; success: boolean; error?: string }> = [];
 

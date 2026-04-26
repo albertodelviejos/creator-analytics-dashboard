@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execSync } from "child_process";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +111,7 @@ async function fetchYouTubeData(handle: string) {
   return { stats, videos };
 }
 
-function syncInstagram(competitorId: number, handle: string, db: ReturnType<typeof getDb>) {
+async function syncInstagram(competitorId: number, handle: string, sql: ReturnType<typeof getDb>) {
   const cleanHandle = handle.replace("@", "");
   const output = execSync(
     `python3 scripts/fetch-competitor-ig.py ${cleanHandle}`,
@@ -122,66 +122,62 @@ function syncInstagram(competitorId: number, handle: string, db: ReturnType<type
   if (data.error) throw new Error(data.error);
 
   // Save snapshot
-  db.prepare(
-    `INSERT INTO competitor_snapshots (competitor_id, platform, followers, total_posts)
-     VALUES (?, 'instagram', ?, ?)`
-  ).run(competitorId, data.followers, data.total_posts);
+  await sql`
+    INSERT INTO competitor_snapshots (competitor_id, platform, followers, total_posts)
+    VALUES (${competitorId}, 'instagram', ${data.followers}, ${data.total_posts})
+  `;
 
   // Upsert posts
-  const upsert = db.prepare(`
-    INSERT INTO competitor_posts (competitor_id, platform, post_id, title, post_type, url, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
-    VALUES (?, 'instagram', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(competitor_id, platform, post_id) DO UPDATE SET
-      views = excluded.views, likes = excluded.likes, comments = excluded.comments,
-      engagement_rate = excluded.engagement_rate, fetched_at = CURRENT_TIMESTAMP
-  `);
-
-  const insertMany = db.transaction((posts: IgResult["posts"]) => {
-    for (const p of posts) {
-      upsert.run(
-        competitorId, p.shortcode, p.caption, p.type,
-        `https://www.instagram.com/p/${p.shortcode}/`,
-        p.published_at, p.views, p.likes, p.comments,
-        p.engagement_rate, p.thumbnail_url
-      );
-    }
-  });
-  insertMany(data.posts);
+  for (const p of data.posts) {
+    await sql`
+      INSERT INTO competitor_posts
+        (competitor_id, platform, post_id, title, post_type, url, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
+      VALUES
+        (${competitorId}, 'instagram', ${p.shortcode}, ${p.caption}, ${p.type},
+         ${"https://www.instagram.com/p/" + p.shortcode + "/"},
+         ${p.published_at}, ${p.views}, ${p.likes}, ${p.comments},
+         ${p.engagement_rate}, ${p.thumbnail_url}, NOW())
+      ON CONFLICT(competitor_id, platform, post_id) DO UPDATE SET
+        views = EXCLUDED.views,
+        likes = EXCLUDED.likes,
+        comments = EXCLUDED.comments,
+        engagement_rate = EXCLUDED.engagement_rate,
+        fetched_at = NOW()
+    `;
+  }
 
   return { posts: data.posts.length, followers: data.followers };
 }
 
-async function syncYouTube(competitorId: number, handle: string, db: ReturnType<typeof getDb>) {
+async function syncYouTube(competitorId: number, handle: string, sql: ReturnType<typeof getDb>) {
   const { stats, videos } = await fetchYouTubeData(handle);
 
   // Save snapshot
-  db.prepare(
-    `INSERT INTO competitor_snapshots (competitor_id, platform, followers, total_posts)
-     VALUES (?, 'youtube', ?, ?)`
-  ).run(competitorId, stats.subscribers, stats.total_videos);
+  await sql`
+    INSERT INTO competitor_snapshots (competitor_id, platform, followers, total_posts)
+    VALUES (${competitorId}, 'youtube', ${stats.subscribers}, ${stats.total_videos})
+  `;
 
   // Upsert videos
-  const upsert = db.prepare(`
-    INSERT INTO competitor_posts (competitor_id, platform, post_id, title, post_type, url, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
-    VALUES (?, 'youtube', ?, ?, 'Video', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(competitor_id, platform, post_id) DO UPDATE SET
-      views = excluded.views, likes = excluded.likes, comments = excluded.comments,
-      engagement_rate = excluded.engagement_rate, fetched_at = CURRENT_TIMESTAMP
-  `);
-
-  const insertMany = db.transaction((vids: YtVideo[]) => {
-    for (const v of vids) {
-      const total = v.likes + v.comments;
-      const engRate = v.views > 0 ? Math.round((total / v.views) * 10000) / 100 : null;
-      upsert.run(
-        competitorId, v.video_id, v.title,
-        `https://www.youtube.com/watch?v=${v.video_id}`,
-        v.published_at, v.views, v.likes, v.comments,
-        engRate, v.thumbnail_url
-      );
-    }
-  });
-  insertMany(videos);
+  for (const v of videos) {
+    const total = v.likes + v.comments;
+    const engRate = v.views > 0 ? Math.round((total / v.views) * 10000) / 100 : null;
+    await sql`
+      INSERT INTO competitor_posts
+        (competitor_id, platform, post_id, title, post_type, url, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
+      VALUES
+        (${competitorId}, 'youtube', ${v.video_id}, ${v.title}, 'Video',
+         ${"https://www.youtube.com/watch?v=" + v.video_id},
+         ${v.published_at}, ${v.views}, ${v.likes}, ${v.comments},
+         ${engRate}, ${v.thumbnail_url}, NOW())
+      ON CONFLICT(competitor_id, platform, post_id) DO UPDATE SET
+        views = EXCLUDED.views,
+        likes = EXCLUDED.likes,
+        comments = EXCLUDED.comments,
+        engagement_rate = EXCLUDED.engagement_rate,
+        fetched_at = NOW()
+    `;
+  }
 
   return { videos: videos.length, subscribers: stats.subscribers };
 }
@@ -190,10 +186,12 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
   const id = parseInt(params.id, 10);
 
-  const competitor = db.prepare("SELECT * FROM competitors WHERE id = ?").get(id) as
+  const rows = await sql`SELECT * FROM competitors WHERE id = ${id}` as unknown as Record<string, unknown>[];
+  const competitor = rows[0] as
     | { id: number; instagram_handle: string | null; youtube_handle: string | null }
     | undefined;
 
@@ -205,7 +203,7 @@ export async function POST(
 
   try {
     if (competitor.instagram_handle) {
-      result.instagram = syncInstagram(id, competitor.instagram_handle, db);
+      result.instagram = await syncInstagram(id, competitor.instagram_handle, sql);
     }
   } catch (err) {
     result.instagram_error = err instanceof Error ? err.message : "Instagram sync failed";
@@ -213,7 +211,7 @@ export async function POST(
 
   try {
     if (competitor.youtube_handle) {
-      result.youtube = await syncYouTube(id, competitor.youtube_handle, db);
+      result.youtube = await syncYouTube(id, competitor.youtube_handle, sql);
     }
   } catch (err) {
     result.youtube_error = err instanceof Error ? err.message : "YouTube sync failed";

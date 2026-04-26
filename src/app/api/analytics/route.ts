@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -37,40 +37,36 @@ export async function GET(request: NextRequest) {
   const to = searchParams.get("to") || "2099-12-31";
   const platform = searchParams.get("platform") || "all";
 
-  const db = getDb();
+  const sql = getDb();
+  await ensureMigrated();
 
   // Fetch Instagram posts (if applicable)
   let igPosts: InstagramRow[] = [];
   if (platform === "all" || platform === "instagram") {
-    igPosts = db
-      .prepare(
-        `SELECT url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate
-         FROM instagram_posts
-         WHERE date(published_at) >= date(?) AND date(published_at) <= date(?)
-         ORDER BY published_at DESC`
-      )
-      .all(from, to) as InstagramRow[];
+    igPosts = await sql`
+      SELECT url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate
+      FROM instagram_posts
+      WHERE published_at::date >= ${from}::date AND published_at::date <= ${to}::date
+      ORDER BY published_at DESC
+    ` as unknown as InstagramRow[];
   }
 
   // Fetch YouTube videos (if applicable)
   let ytVideos: YouTubeRow[] = [];
   if (platform === "all" || platform === "youtube") {
-    ytVideos = db
-      .prepare(
-        `SELECT video_id, title, published_at, views, likes, comments, thumbnail_url
-         FROM youtube_videos
-         WHERE date(published_at) >= date(?) AND date(published_at) <= date(?)
-         ORDER BY published_at DESC`
-      )
-      .all(from, to) as YouTubeRow[];
+    ytVideos = await sql`
+      SELECT video_id, title, published_at, views, likes, comments, thumbnail_url
+      FROM youtube_videos
+      WHERE published_at::date >= ${from}::date AND published_at::date <= ${to}::date
+      ORDER BY published_at DESC
+    ` as unknown as YouTubeRow[];
   }
 
   // Channel stats (latest)
-  const channelStats = db
-    .prepare(
-      "SELECT subscribers, total_views, total_videos FROM youtube_channel_stats ORDER BY recorded_at DESC LIMIT 1"
-    )
-    .get() as ChannelStatsRow | undefined;
+  const channelStatsRows = await sql`
+    SELECT subscribers, total_views, total_videos FROM youtube_channel_stats ORDER BY recorded_at DESC LIMIT 1
+  ` as unknown as ChannelStatsRow[];
+  const channelStats = channelStatsRows[0] as ChannelStatsRow | undefined;
 
   // Summary stats
   const totalIgViews = igPosts.reduce((s, p) => s + (p.views ?? 0), 0);

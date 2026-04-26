@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureMigrated } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-  const db = getDb();
+export async function GET() {
+  const sql = getDb();
+  await ensureMigrated();
 
-  const competitors = db
-    .prepare("SELECT * FROM competitors ORDER BY created_at DESC")
-    .all() as Array<{
+  const competitors = await sql`SELECT * FROM competitors ORDER BY created_at DESC` as Array<{
     id: number;
     name: string;
     instagram_handle: string | null;
@@ -20,18 +19,16 @@ export function GET() {
   }>;
 
   // Get latest snapshot per competitor per platform
-  const snapshots = db
-    .prepare(
-      `SELECT cs.* FROM competitor_snapshots cs
-       INNER JOIN (
-         SELECT competitor_id, platform, MAX(recorded_at) as max_date
-         FROM competitor_snapshots
-         GROUP BY competitor_id, platform
-       ) latest ON cs.competitor_id = latest.competitor_id
-         AND cs.platform = latest.platform
-         AND cs.recorded_at = latest.max_date`
-    )
-    .all() as Array<{
+  const snapshots = await sql`
+    SELECT cs.* FROM competitor_snapshots cs
+    INNER JOIN (
+      SELECT competitor_id, platform, MAX(recorded_at) as max_date
+      FROM competitor_snapshots
+      GROUP BY competitor_id, platform
+    ) latest ON cs.competitor_id = latest.competitor_id
+      AND cs.platform = latest.platform
+      AND cs.recorded_at = latest.max_date
+  ` as Array<{
     competitor_id: number;
     platform: string;
     followers: number | null;
@@ -40,14 +37,12 @@ export function GET() {
   }>;
 
   // Get post counts and avg engagement per competitor
-  const postStats = db
-    .prepare(
-      `SELECT competitor_id, platform, COUNT(*) as post_count,
-              AVG(engagement_rate) as avg_engagement
-       FROM competitor_posts
-       GROUP BY competitor_id, platform`
-    )
-    .all() as Array<{
+  const postStats = await sql`
+    SELECT competitor_id, platform, COUNT(*) as post_count,
+           AVG(engagement_rate) as avg_engagement
+    FROM competitor_posts
+    GROUP BY competitor_id, platform
+  ` as Array<{
     competitor_id: number;
     platform: string;
     post_count: number;
@@ -87,6 +82,8 @@ export function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const sql = getDb();
+  await ensureMigrated();
   const body = await request.json();
   const { name, instagram_handle, youtube_handle, x_handle, threads_handle, notes } = body;
 
@@ -94,24 +91,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
-  const db = getDb();
-  const result = db
-    .prepare(
-      `INSERT INTO competitors (name, instagram_handle, youtube_handle, x_handle, threads_handle, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      name,
-      instagram_handle || null,
-      youtube_handle || null,
-      x_handle || null,
-      threads_handle || null,
-      notes || null
-    );
+  const result = await sql`
+    INSERT INTO competitors (name, instagram_handle, youtube_handle, x_handle, threads_handle, notes)
+    VALUES (${name}, ${instagram_handle || null}, ${youtube_handle || null}, ${x_handle || null}, ${threads_handle || null}, ${notes || null})
+    RETURNING *
+  ` as unknown as Record<string, unknown>[];
 
-  const competitor = db
-    .prepare("SELECT * FROM competitors WHERE id = ?")
-    .get(result.lastInsertRowid);
-
-  return NextResponse.json(competitor, { status: 201 });
+  return NextResponse.json(result[0], { status: 201 });
 }
