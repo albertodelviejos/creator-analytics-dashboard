@@ -31,7 +31,16 @@ async function getData() {
   await ensureMigrated();
 
   const videos = await sql`SELECT * FROM youtube_videos ORDER BY published_at DESC` as YouTubeVideo[];
-  const channelHistory = await sql`SELECT * FROM youtube_channel_stats ORDER BY recorded_at DESC LIMIT 30` as ChannelStats[];
+
+  // Neon returns TIMESTAMPTZ columns as JS Date objects, not strings. The Date
+  // also survives the RSC boundary as a Date, so .slice() in the client component
+  // throws "is not a function". Normalize to ISO strings here so the
+  // `recorded_at: string` contract holds at the boundary.
+  const rawHistory = await sql`SELECT * FROM youtube_channel_stats ORDER BY recorded_at DESC LIMIT 30` as Array<Omit<ChannelStats, "recorded_at"> & { recorded_at: string | Date }>;
+  const channelHistory: ChannelStats[] = rawHistory.map((row) => ({
+    ...row,
+    recorded_at: row.recorded_at instanceof Date ? row.recorded_at.toISOString() : String(row.recorded_at),
+  }));
 
   return { videos, channelHistory };
 }
