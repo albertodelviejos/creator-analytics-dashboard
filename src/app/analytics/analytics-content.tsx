@@ -100,6 +100,10 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function fmtTick(v: number) {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
@@ -114,7 +118,7 @@ export function AnalyticsContent() {
 
   const [preset, setPreset] = useState<Preset>("all");
   const [from, setFrom] = useState("2020-01-01");
-  const [to, setTo] = useState("2026-04-01");
+  const [to, setTo] = useState(today());
   const [platform, setPlatform] = useState<Platform>("all");
 
   const [sortKey, setSortKey] = useState<string>("views");
@@ -139,18 +143,19 @@ export function AnalyticsContent() {
 
   function applyPreset(p: Preset) {
     setPreset(p);
+    const now = today();
     if (p === "7d") {
       setFrom(daysAgo(7));
-      setTo("2026-04-01");
+      setTo(now);
     } else if (p === "30d") {
       setFrom(daysAgo(30));
-      setTo("2026-04-01");
+      setTo(now);
     } else if (p === "90d") {
       setFrom(daysAgo(90));
-      setTo("2026-04-01");
+      setTo(now);
     } else if (p === "all") {
       setFrom("2020-01-01");
-      setTo("2026-04-01");
+      setTo(now);
     }
   }
 

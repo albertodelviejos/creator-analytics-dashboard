@@ -8,6 +8,15 @@ LOG="$LOG_DIR/sync-$(date +%Y-%m-%d).log"
 
 cd /Users/alberto/creator-analytics-dashboard
 
+# Load .env.local so DATABASE_URL and other secrets are available to fetch scripts
+# (Next.js auto-loads it for /api routes, but standalone TS/Python scripts do not)
+if [ -f .env.local ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.local
+  set +a
+fi
+
 echo "=== Sync started at $(date) ===" >> "$LOG"
 
 # 1. YouTube (reliable, API key)

@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 """
-Fetch ALL Instagram posts for a profile and save to SQLite.
+Fetch ALL Instagram posts for a profile and save to Neon (Postgres).
 Uses instaloader session cookies + Instagram v1 feed API with pagination.
+
+Requires DATABASE_URL_UNPOOLED (or DATABASE_URL) in env. sync-all.sh sources
+.env.local before running this script. Schema must already exist (created by
+src/lib/db.ts:ensureMigrated() — first hit of any /api route migrates it).
 """
 
 import instaloader
 import json
 import sys
 import time
-import sqlite3
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "analytics.db")
+import psycopg2
+import psycopg2.extras
+
+# Prefer unpooled connection for one-shot scripts (avoids pooler session limits).
+# Fall back to the pooled URL if only that is set.
+DATABASE_URL = os.environ.get("DATABASE_URL_UNPOOLED") or os.environ.get("DATABASE_URL")
 
 HEADERS = {
     "User-Agent": "Instagram 275.0.0.27.98 Android",
@@ -20,25 +28,15 @@ HEADERS = {
 }
 
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS instagram_posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            shortcode TEXT NOT NULL,
-            type TEXT CHECK(type IN ('Reel', 'Post', 'Carrusel')),
-            caption TEXT,
-            published_at TEXT NOT NULL,
-            views INTEGER,
-            likes INTEGER NOT NULL DEFAULT 0,
-            comments INTEGER NOT NULL DEFAULT 0,
-            engagement_rate REAL,
-            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    if not DATABASE_URL:
+        raise SystemExit(
+            "❌ DATABASE_URL_UNPOOLED / DATABASE_URL not set. "
+            "Run via sync-all.sh (which sources .env.local) or export it manually."
         )
-    """)
-    conn.commit()
-    return conn
+    # Schema is owned by src/lib/db.ts:ensureMigrated(). We only OPEN the connection
+    # here; we don't try to CREATE TABLE because the column types differ from SQLite
+    # (SERIAL vs AUTOINCREMENT, TIMESTAMPTZ vs DATETIME, DOUBLE PRECISION vs REAL).
+    return psycopg2.connect(DATABASE_URL)
 
 def get_session():
     L = instaloader.Instaloader(
@@ -149,23 +147,31 @@ def fetch_all_posts(session, user_id):
     return posts
 
 def save_to_db(conn, posts):
-    cursor = conn.cursor()
+    """Upsert posts to Neon. Postgres ON CONFLICT mirrors the previous SQLite logic."""
     saved = 0
-    for p in posts:
-        cursor.execute("""
-            INSERT INTO instagram_posts (url, shortcode, type, caption, published_at, views, likes, comments, engagement_rate, thumbnail_url, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(url) DO UPDATE SET
-                views = excluded.views,
-                likes = excluded.likes,
-                comments = excluded.comments,
-                engagement_rate = excluded.engagement_rate,
-                thumbnail_url = excluded.thumbnail_url,
-                fetched_at = CURRENT_TIMESTAMP
-        """, (p["url"], p["shortcode"], p["type"], p["caption"],
-              p["published_at"], p["views"], p["likes"], p["comments"],
-              p["engagement_rate"], p["thumbnail_url"]))
-        saved += 1
+    with conn.cursor() as cursor:
+        for p in posts:
+            cursor.execute(
+                """
+                INSERT INTO instagram_posts (
+                    url, shortcode, type, caption, published_at,
+                    views, likes, comments, engagement_rate, thumbnail_url, fetched_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (url) DO UPDATE SET
+                    views = EXCLUDED.views,
+                    likes = EXCLUDED.likes,
+                    comments = EXCLUDED.comments,
+                    engagement_rate = EXCLUDED.engagement_rate,
+                    thumbnail_url = EXCLUDED.thumbnail_url,
+                    fetched_at = NOW()
+                """,
+                (
+                    p["url"], p["shortcode"], p["type"], p["caption"],
+                    p["published_at"], p["views"], p["likes"], p["comments"],
+                    p["engagement_rate"], p["thumbnail_url"],
+                ),
+            )
+            saved += 1
     conn.commit()
     return saved
 
